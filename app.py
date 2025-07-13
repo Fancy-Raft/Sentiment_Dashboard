@@ -63,7 +63,7 @@ def load_data():
 
 data = load_data()
 
-# --- Struktur Tab Dashboard ---
+# --- Struktur Tab Dashboard  ---
 tab1, tab2 = st.tabs(["Overview", "Text Analysis"])
 
 # ========== Tab 1: Overview ==========
