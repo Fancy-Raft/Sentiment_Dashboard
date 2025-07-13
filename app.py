@@ -1,15 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from wordcloud import WordCloud
 import matplotlib.pyplot as plt
+from wordcloud import WordCloud
 from collections import Counter
-import re
-import nltk
 from io import BytesIO
+import nltk
 import requests
-import numpy as np
 
 # --- NLTK Data Downloads ---
 @st.cache_resource
@@ -29,99 +26,128 @@ st.markdown("""
 st.sidebar.markdown("Filter data dan konfigurasikan visualisasi:")
 
 # --- Definisi Nama Kolom ---
-TEXT_COL = 'Content'  # Kolom komentar asli
+TEXT_COL = 'cleaned_raw_content'  # Kolom komentar asli
 PREPROCESSED_TEXT_COL = 'preprocessed_content'  # Kolom komentar yang sudah diproses
-SENTIMENT_COL = 'sentiment_preprocessed_content'  # Kolom label sentimen
+SENTIMENT_COL_TEXBLOB = 'sentiment_textblob_preprocessed_content'  # Kolom sentiment untuk TextBlob
+SENTIMENT_COL_VADER = 'sentiment_vader_preprocessed_content'  # Kolom sentiment untuk Vader
+SENTIMENT_COL_SENTIWORDNET = 'sentiment_sentiwordnet_preprocessed_content'  # Kolom sentiment untuk SentiWordNet
 
 # --- Fungsi untuk Memuat Data ---
 @st.cache_data(persist=True)
-def load_data():
+def load_data(dataset_type='texblob'):
+    """
+    Function to load the dataset based on the selected sentiment analysis method.
+    """
     try:
-        # Ganti dengan path file Anda atau pastikan file diupload di Streamlit
-        data = pd.read_csv("twitter_data_labeled.csv")
+        if dataset_type == 'texblob':
+            data = pd.read_csv("twitter_data_labeled.csv")  # Replace with actual path for TexBlob
+        elif dataset_type == 'vader':
+            data = pd.read_csv("labeled_data.csv")  # Replace with actual path for Vader
+        elif dataset_type == 'sentiwordnet':
+            data = pd.read_csv("labeled_data.csv")  # Replace with actual path for SentiWordNet
     except FileNotFoundError:
-        st.error("ERROR: File 'twitter_data_labeled.csv' tidak ditemukan.")
+        st.error(f"ERROR: File for {dataset_type} not found.")
         st.stop()
-
-    if PREPROCESSED_TEXT_COL not in data.columns:
-        st.error(f"Kolom '{PREPROCESSED_TEXT_COL}' tidak ditemukan di dataset.")
-        st.stop()
-    if SENTIMENT_COL not in data.columns:
-        st.error(f"Kolom '{SENTIMENT_COL}' tidak ditemukan di dataset.")
-        st.stop()
-
-    data[PREPROCESSED_TEXT_COL] = data[PREPROCESSED_TEXT_COL].astype(str)
-    data[SENTIMENT_COL] = data[SENTIMENT_COL].astype(str)
-    
-    # Filter 'error' sentiment
-    original_rows = len(data)
-    data = data[data[SENTIMENT_COL] != 'error']
-    if len(data) < original_rows:
-        st.warning(f"Menghapus {original_rows - len(data)} baris dengan sentimen 'error'.")
     
     return data
 
-data = load_data()
-
-# --- Struktur Tab Dashboard  ---
+# --- Struktur Tab Dashboard ---
 tab1, tab2 = st.tabs(["Overview", "Text Analysis"])
 
 # ========== Tab 1: Overview ==========
-
 with tab1:
     st.header("Statistik Umum")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Distribusi Sentimen Komentar")
-        viz_type = st.selectbox('Pilih jenis visualisasi', ['Bar plot', 'Pie chart'])
-        sentiment_count = data[SENTIMENT_COL].value_counts().reset_index()
-        sentiment_count.columns = ['Sentimen', 'Jumlah']
-        
-        if viz_type == 'Bar plot':
-            fig = px.bar(sentiment_count, x='Sentimen', y='Jumlah', color='Sentimen', height=400, title="Distribusi Sentimen Keseluruhan")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            fig = px.pie(sentiment_count, values='Jumlah', names='Sentimen', title="Distribusi Sentimen Keseluruhan")
-            st.plotly_chart(fig, use_container_width=True)
+    # --- Pilihan untuk distribusi sentimen ---
+    st.subheader("Distribusi Sentimen Bitcoin Comments")
     
-    with col2:
-        st.subheader("Contoh Komentar Asli per Sentimen")
-        selected_sentiment_for_comments = st.selectbox("Pilih sentimen untuk melihat komentar:", data[SENTIMENT_COL].unique())
-        num_comments_to_show = st.slider("Jumlah komentar yang akan ditampilkan", 1, 10, 5)
+    # --- Sentiment Analysis Method Selection in Main Content ---
+    method = st.selectbox("Pilih Metode Analisis Sentimen", ['TexBlob', 'Vader', 'SentiWordNet'])
 
-        if selected_sentiment_for_comments:
-            top_comments_df = data[data[SENTIMENT_COL] == selected_sentiment_for_comments][TEXT_COL].head(num_comments_to_show).reset_index(drop=True)
-            if not top_comments_df.empty:
-                for i, comment in enumerate(top_comments_df):
-                    st.write(f"**{i+1}.** {comment}")
-            else:
-                st.info("Tidak ada komentar ditemukan untuk sentimen yang dipilih setelah filter.")
+    # Load dataset based on the sentiment method selected
+    data = load_data(dataset_type=method.lower())
+
+    # Choose the appropriate sentiment column based on selected method
+    if method == 'TexBlob':
+        sentiment_column = SENTIMENT_COL_TEXBLOB
+    elif method == 'Vader':
+        sentiment_column = SENTIMENT_COL_VADER
+    else:  # SentiWordNet
+        sentiment_column = SENTIMENT_COL_SENTIWORDNET
+    
+    # Group by sentiment and count
+    sentiment_count = data[sentiment_column].value_counts().reset_index()
+    sentiment_count.columns = ['Sentiment', 'Count']
+
+    # Pilihan untuk visualisasi
+    chart_type = st.selectbox("Pilih jenis visualisasi", ['Bar chart', 'Pie chart'])
+
+    if chart_type == 'Bar chart':
+        # Plotly bar chart for sentiment distribution with hover information
+        fig = px.bar(sentiment_count, 
+                     x='Sentiment', 
+                     y='Count', 
+                     color='Sentiment', 
+                     hover_data={'Sentiment': True, 'Count': True}, 
+                     labels={'Sentiment': 'Sentiment Type', 'Count': 'Number of Comments'}, 
+                     title=f"Distribusi Sentimen {method} Bitcoin Comments",
+                     height=400)
+
+        fig.update_layout(xaxis_title='Sentiment', yaxis_title='Number of Comments')
+        st.plotly_chart(fig, use_container_width=True)
+
+    elif chart_type == 'Pie chart':
+        # Plotly pie chart for sentiment distribution with hover information
+        fig = px.pie(sentiment_count, 
+                     values='Count', 
+                     names='Sentiment', 
+                     hover_data={'Sentiment': True, 'Count': True}, 
+                     title=f"Distribusi Sentimen {method} Bitcoin Comments")
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Contoh Komentar Asli per Sentimen")
+    selected_sentiment_for_comments = st.selectbox("Pilih sentimen untuk melihat komentar:", data[sentiment_column].unique())
+    num_comments_to_show = st.slider("Jumlah komentar yang akan ditampilkan", 1, 10, 5)
+
+    if selected_sentiment_for_comments:
+        top_comments_df = data[data[sentiment_column] == selected_sentiment_for_comments][TEXT_COL].head(num_comments_to_show).reset_index(drop=True)
+        if not top_comments_df.empty:
+            for i, comment in enumerate(top_comments_df):
+                st.write(f"**{i+1}.** {comment}")
         else:
-            st.info("Pilih sentimen untuk menampilkan komentar.")
+            st.info("Tidak ada komentar ditemukan untuk sentimen yang dipilih setelah filter.")
+    else:
+        st.info("Pilih sentimen untuk menampilkan komentar.")
 
 # ========== Tab 2: Text Analysis ==========
-
 with tab2:
     st.header("Analisis Tekstual")
     
-    st.subheader("Word Cloud (Kata Unik per Sentimen)")
+    # No need for the sentiment method selection here anymore
+    st.subheader("Word Cloud (Kata Unik)")
+
     top_n_words_wc = st.slider("Jumlah kata teratas yang akan dipertimbangkan untuk word cloud unik", 50, 200, 100)
     colormap_wc = st.selectbox("Pilih tema warna untuk word cloud", ['viridis', 'plasma', 'inferno', 'magma', 'cividis'])
+
+    # Load the dataset independently for text analysis
+    data_text_analysis = load_data(dataset_type='texblob')  # Load default method or based on preference
 
     all_sentiment_labels = ['positive', 'neutral', 'negative']
     sentiment_words = {label: Counter() for label in all_sentiment_labels}
 
-    # Mengumpulkan frekuensi kata untuk setiap sentimen
+    # Collect word frequencies for each sentiment in the text analysis tab (independent of method)
     for label in all_sentiment_labels:
-        text_list = data[data[SENTIMENT_COL] == label][PREPROCESSED_TEXT_COL].dropna().tolist()
+        text_list = data_text_analysis[data_text_analysis[SENTIMENT_COL_TEXBLOB] == label][PREPROCESSED_TEXT_COL].dropna().tolist()
         if text_list:
             full_text = ' '.join(text_list)
             sentiment_words[label].update(full_text.split())
 
+    # Get top N words for each sentiment label
     top_words_per_sentiment = {label: [word for word, count in counter.most_common(top_n_words_wc)]
                                for label, counter in sentiment_words.items()}
 
+    # Create unique words per sentiment (to avoid duplicates across labels)
     unique_words_for_wc = {label: set() for label in all_sentiment_labels}
     unique_words_for_wc['positive'].update(top_words_per_sentiment['positive'])
 
@@ -133,15 +159,20 @@ with tab2:
         if word not in unique_words_for_wc['positive'] and word not in unique_words_for_wc['negative']:
             unique_words_for_wc['neutral'].add(word)
 
+    # Generate WordCloud for each sentiment
     for label in all_sentiment_labels:
-        st.subheader(f"Word Cloud untuk Sentimen {label.capitalize()}")
+        st.subheader(f"Word Cloud untuk Sentimen {label.capitalize()}")  # Removed method from title
+        
+        # Ensure there is data for this sentiment
         words_to_use = unique_words_for_wc[label]
         filtered_counter = Counter({word: count for word, count in sentiment_words[label].items() if word in words_to_use})
-        
-        if not filtered_counter:
-            st.info(f"Tidak ada kata unik yang tersisa untuk sentimen '{label}'.")
-            continue
 
+        if len(filtered_counter) == 0:
+            st.warning(f"Tidak ada kata untuk ditampilkan pada word cloud untuk sentimen {label.capitalize()}.")
+            st.write(f"Sentiment data for {label}: {sentiment_words[label]}")  # Debugging line
+            continue  # Skip to the next sentiment
+
+        # Generate WordCloud for all available words
         wc = WordCloud(width=800, height=400, background_color='white',
                        collocations=False, min_font_size=10,
                        colormap=colormap_wc).generate_from_frequencies(filtered_counter)
@@ -194,8 +225,7 @@ st.sidebar.markdown(
 )
 st.sidebar.info("""
     **Fitur Dashboard:**
-    - Plot distribusi sentimen interaktif
-    - Word cloud yang dapat disesuaikan dengan kata-kata unik per sentimen
+    - Plot distribusi sentimen interaktif dengan pilihan metode analisis (TexBlob, Vader, SentiWordNet)
     - Kemampuan ekspor data
     - Menampilkan contoh komentar asli teratas per sentimen
 """)
