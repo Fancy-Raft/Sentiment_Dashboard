@@ -20,11 +20,11 @@ def download_nltk_data():
 download_nltk_data()
 
 # --- Streamlit App Starts Here ---
-st.title("🤖 Sentiment Analysis of AI Comments Dashboard")
+st.title("🤖 Sentiment Analysis of Bitcoin Comments Dashboard")
 st.sidebar.title("Navigation & Filters")
 st.markdown("""
-    ### Interactive AI Comment Analysis Dashboard
-    Jelajahi pola sentimen dari komentar terkait AI dengan visualisasi interaktif.
+    ### Interactive Bitcoin Comment Analysis Dashboard
+    Jelajahi pola sentimen dari komentar terkait Bitcoin dengan visualisasi interaktif.
     """)
 st.sidebar.markdown("Filter data dan konfigurasikan visualisasi:")
 
@@ -170,7 +170,7 @@ if st.sidebar.button("Unduh Komentar Berlabel sebagai CSV"):
     st.sidebar.download_button(
         label="Unduh CSV",
         data=csv,
-        file_name="ai_comments_labeled.csv",
+        file_name="bitcoin_comments_labeled.csv",
         mime="text/csv"
     )
 
